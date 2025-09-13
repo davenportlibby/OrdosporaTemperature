@@ -59,9 +59,6 @@ a$adults<-rowSums(a[,c('UA_L','OPA_L')],na.rm=T)
 a$juveniles<-rowSums(a[,c('UJ_L','OPJ_L')],na.rm=T)
 a$males<-rowSums(a[,c('UM_L','OPM_L')],na.rm=T)
 a$OPprev<-a$OPinfected/a$density
-a$adultOPprev<-a$OPA_L/a$adults
-a$OPtotalprev<-rowSums(a[,c('OPprev')], na.rm = T)
-a$adultOPtotalprev<-rowSums(a[,c('adultOPprev')], na.rm = T)
 
 a <- as.data.frame(a)
 a$Treatment <- as.factor(a$Treatment)
@@ -72,15 +69,15 @@ a$TurnoverID <- as.factor(a$TurnoverID)
 
 ##Figure 4
 ```{r,message=F,warning=F}
-c <- as.data.frame(c)
+d <- as.data.frame(d)
 
-c$Treatment <- as.factor(c$Treatment)
+d$Treatment <- as.factor(d$Treatment)
 
 cols3 <- c("OP20"= "#F09D00","OP_turnover"= "#A14A10","OPdeltaT"="#0072B2","OPdeltaT_turnover"="#0012A0")
 level_order <- c('OP20', 'OP_turnover', 'OPdeltaT', 'OPdeltaT_turnover') 
 
 library(Rmisc)
-auc_plot2<-summarySE(data = c, measurevar = "AUC", groupvars = c("Treatment"), na.rm = T)
+auc_plot2<-summarySE(data = d, measurevar = "AUC", groupvars = c("Treatment"), na.rm = T)
 # the line above summarizes data within treatments and calculates sd, se and ci
 
 AUCinfden<- # makes the plot
@@ -281,7 +278,7 @@ micg.walsh <- ggplot(micg.w) +
         legend.text=element_text(size=6,face="bold"),
         legend.position = "none") +
   labs(x = (""))
-
+micg.walsh
 ##ggsave("Ordospora_Walsh_v2.jpg", plot = micg.walsh, width = 3, height = 3, dpi = 600)
 ```
 
@@ -941,48 +938,6 @@ combined.plots3
 ```
 
 
-##Figure 4
-```{r,message=F,warning=F}
-d <- as.data.frame(d)
-d$Treatment <- as.factor(d$Treatment)
-
-cols3 <- c("OP20"= "#F09D00","OP_turnover"= "#A14A10","OPdeltaT"="#0072B2","OPdeltaT_turnover"="#0012A0")
-level_order <- c('OP20', 'OP_turnover', 'OPdeltaT', 'OPdeltaT_turnover') 
-
-library(Rmisc)
-auc_plot2<-summarySE(data = d, measurevar = "AUC", groupvars = c("Treatment"), na.rm = T)
-# the line above summarizes data within treatments and calculates sd, se and ci
-
-aucinfdenplot<- # makes the plot
-  ggplot(auc_plot2, aes(x=Treatment, y=AUC, color=Treatment)) + 
-  geom_line(position=position_dodge(.2))+
-  geom_errorbar(aes(ymin=AUC-se, ymax=AUC+se), width=0, 
-                position=position_dodge(.2)) + 
-  scale_x_discrete(limits = level_order, labels = c("OP20"="20C", "OP_turnover"= "20C + Turnover", "OPdeltaT"="DVM", "OPdeltaT_turnover"="DVM + Turnover"))+
-  ggtitle("") +
-  ylab("Area under curve\n(hosts x days/L)")+
-  xlab("Treatment")+
-  geom_point(position=position_dodge(.2), size=3)+
-  scale_color_manual(values = cols3, breaks = c("OP20", "OP_turnover", "OPdeltaT", "OPdeltaT_turnover"),labels = c("OP20"="20C", "OP_turnover"= "20C + Turnover", "OPdeltaT"="DVM", "OPdeltaT_turnover"="DVM + Turnover"))+
-  theme_classic()+
-  theme(axis.text = element_text(size = 8, colour = "black"),
-        axis.title.x = element_text(face = "bold",size = 8, colour = "black"),
-        axis.title.y = element_text(face = "bold",size = 8, colour = "black"),
-        legend.position = "none")+
-   annotate(geom="text", x=1, y=20000, label="a", size=4,
-           color="black")+
-  annotate(geom="text", x=2, y=13000, label="b", size=4,
-           color="black")+
-  annotate(geom="text", x=3, y=12000, label="b", size=4,
-           color="black")+
-  annotate(geom="text", x=4, y=5000, label="b", size=4,
-           color="black")
-
-aucinfdenplot # prints the plot
-##ggsave("Figure_4_Ordospora_Temperature.jpg", aucinfdenplot, height = 4, width = 4, dpi = 600) # saves the plot
-```
-
-
 ##AUC Infected Host Density Stats
 ```{r,message=F,warning=F}
 a2<- aov(AUC ~ Treatment, data = d) ##linear model
@@ -1036,7 +991,7 @@ write.csv(EM_dens_gam1, file = "OPTempEM_dens_gam_0_48.csv", row.names = FALSE)
 # GAM model on OP prevalence
 # interaction between treatment and day and separate smoothers for each treatment
 
-prev_gam <- gam(OPtotalprev ~ Treatment*Day + 
+prev_gam <- gam(OPprev ~ Treatment*Day + 
              s(Day, by = as.numeric(Treatment == "OP.20"), k = 6) + 
              s(Day, by = as.numeric(Treatment == "OP.deltaT"), k = 6), 
            data = only.OPb4)
@@ -1091,7 +1046,7 @@ write.csv(EM_dens_gam2, file = "OPTempEM_density_gam_49_84_afterT.csv", row.name
 
 
 
-OPprev_gam2 <- gam(OPtotalprev ~ TurnoverID*Day + 
+OPprev_gam2 <- gam(OPprev ~ TurnoverID*Day + 
              s(Day, by = as.numeric(TurnoverID == "TOP20"), k=5) + 
                s(Day, by = as.numeric(TurnoverID == "TOPdeltaT"), k=5)+
              s(Day, by = as.numeric(TurnoverID == "OP20"), k=5) + 

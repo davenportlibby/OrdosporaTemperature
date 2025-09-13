@@ -61,10 +61,6 @@ a$adults<-rowSums(a[,c('UA_L','OPA_L')],na.rm=T)
 a$juveniles<-rowSums(a[,c('UJ_L','OPJ_L')],na.rm=T)
 a$males<-rowSums(a[,c('UM_L','OPM_L')],na.rm=T)
 a$OPprev<-a$OPinfected/a$density
-a$adultOPprev<-a$OPA_L/a$adults
-a$OPtotalprev<-rowSums(a[,c('OPprev')], na.rm = T)
-a$adultOPtotalprev<-rowSums(a[,c('adultOPprev')], na.rm = T)
-
 a <- as.data.frame(a)
 a$Treatment <- as.factor(a$Treatment)
 a$Turnover <- as.factor(a$Turnover)
@@ -228,5 +224,128 @@ TukeyHSD(aucprevmodel)
 ##significantly different pairwise comparisons: OP20-OP_turnover, OPdeltaT_turnover-OP20, OPdeltaT-OP20, OPdeltaT_turnover-OP_turnover
 
 ```
+
+##Prevalence v. Density
+```{r,message=F,warning=F}
+
+pd = a %>%
+  filter(Day > 48)
+
+pd = pd %>%
+  filter(TurnoverID == "OP20"| TurnoverID == "TOP20" | TurnoverID == "OPdeltaT" | TurnoverID == "TOPdeltaT")
+
+colsOP20_v2 <- c("OP.20"= "#F09D00","OP20"= "#F09D00","TOP20"= "#A14A10","OP.deltaT"="#0072B2","TOPdeltaT"="#0012A0","OPdeltaT"="#0072B2")
+
+pdOP = pd %>%
+  filter(TurnoverID == "OP20"| TurnoverID == "TOP20")
+
+prevdenOP <- ggplot(data=pdOP, aes(x=OPprev,y=density, group=TurnoverID,
+                 color=TurnoverID)) +
+  geom_point() +
+  geom_smooth(method = "lm", se=TRUE, linewidth=.5)+
+  scale_colour_manual(name="",values = colsOP20_v2)+
+   stat_cor(aes(color = TurnoverID),method="spearman",label.x = .5)+
+  scale_x_continuous(limits = c(-0.05,1.05), breaks = seq(0,1,.25))+
+  scale_y_continuous(limits = c(0, 2500),breaks = seq(0,2500,500)) +
+ ggtitle("(A)") +
+  theme_bw() +
+  theme(panel.border = element_blank(), 
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(), 
+        axis.line = element_line(colour = "black"),
+        axis.text=element_text(size=8, face = "bold"), 
+        axis.title=element_text(size=10,face="bold"),
+        legend.text=element_text(size=8,face="bold"),
+        legend.position = "bottom",
+        legend.title = element_blank())+
+  labs(x = ("Infection Prevalence"), y = "Host Density (per L)")+guides(color=guide_legend(nrow=1, override.aes=list(fill=NA)))
+
+prevdenOP
+
+pdDVM = pd %>%
+  filter(TurnoverID == "OPdeltaT" | TurnoverID == "TOPdeltaT")
+
+prevdenDVM <- ggplot(data=pdDVM, aes(x=OPprev,y=density, group=TurnoverID,
+                 color=TurnoverID)) +
+  geom_point() +
+  geom_smooth(method = "lm", se=TRUE, linewidth=.5)+
+  scale_colour_manual(name="",values = colsOP20_v2)+
+   stat_cor(aes(color = TurnoverID),method="spearman",label.x = .5)+
+  scale_x_continuous(limits = c(-0.05,1.05), breaks = seq(0,1,.25))+
+  scale_y_continuous(limits = c(0, 2500),breaks = seq(0,2500,500)) +
+ ggtitle("(B)") +
+  theme_bw() +
+  theme(panel.border = element_blank(), 
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(), 
+        axis.line = element_line(colour = "black"),
+        axis.text=element_text(size=8, face = "bold"), 
+        axis.title=element_text(size=10,face="bold"),
+        legend.text=element_text(size=8,face="bold"),
+        legend.position = "bottom",
+        legend.title = element_blank())+
+  labs(x = ("Infection Prevalence"), y = "Host Density (per L)")+guides(color=guide_legend(nrow=1, override.aes=list(fill=NA)))
+
+prevdenDVM
+
+##ggsave(here("figures", "Prev_v_dens_v2.jpg"), prevden, width = 6, height = 4, dpi = 600)
+
+
+combinedprevdenplots = ggarrange(prevdenOP,prevdenDVM,
+                     nrow = 1, ncol = 2, common.legend = FALSE, legend="bottom")
+combinedprevdenplots
+##ggsave(here("figures", "Combo_Density_v_Prev.jpg"), combinedprevdenplots, width = 9, height = 4, dpi = 600)
+
+
+
+resPrevDen <- cor.test(pd$OPprev, pd$density, group = TurnoverID, 
+                method = "pearson")
+resPrevDen
+
+```
+
+
+##Control densities only
+```{r,message=F,warning=F}
+C <- as.data.frame(a)
+
+C <- C %>% filter(Treatment == "Control.20"| Treatment == "Control.deltaT")
+C_b4 <- C %>% filter(Day < 50)
+C_l8tr <- C %>% filter(Day > 48)
+
+C_b4$Treatment <- as.factor(C_b4$Treatment)
+
+C_l8tr$Treatment <- as.factor(C_l8tr$Treatment)
+C_l8tr$Turnover <- as.factor(C_l8tr$Turnover)
+C_l8tr$TurnoverID <- as.factor(C_l8tr$TurnoverID)
+
+colsC_v2 <- c("Control.20"= "#009E73","C20"= "#009E73","TC20"= "#114A10","Control.deltaT"="#A853F9","TCdeltaT"="purple4","CdeltaT"="#A853F9")
+
+onlyControlv2<- ggplot()+
+  geom_smooth(data=C_b4, aes(x=Day, y=density, group=Treatment, color=Treatment), span = 0.4, se=FALSE) +
+  geom_point(data=C_b4, aes(x=Day, y=density, group=Treatment, color=Treatment), size =.5, alpha=.5)+
+  geom_smooth(data=C_l8tr, aes(x=Day, y=density, group=TurnoverID, color=TurnoverID), span = 0.4, se=FALSE) +
+  geom_point(data=C_l8tr, aes(x=Day, y=density, group=TurnoverID, color=TurnoverID), size =.5, alpha=.5)+
+  scale_colour_manual(values = colsC_v2, breaks = c('Control.20', 'TC20', 'Control.deltaT', 'TCdeltaT'), 
+                      labels = c("20C", "20C + Turnover", "DVM", "DVM + Turnover"))+
+  scale_x_continuous(limits = c(0,90), breaks = seq(0,90,10))+
+  geom_vline(xintercept = 49)+
+  theme_bw()+theme(panel.border = element_blank(), 
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(), 
+        axis.line = element_line(colour = "black"))+
+  ggtitle("") +
+  labs(y=("Density (per L)"), color = ("Treatment"))+
+  theme(plot.title = element_text(face = "bold",size = 10),
+        axis.text=element_text(size=8, face = "bold"), 
+        axis.title=element_text(size=8,face="bold"),
+        legend.text=element_text(size=6,face="bold"),
+        legend.title=element_text(size=8,face="bold"),
+        legend.key.width = unit(1.5, 'cm'),
+        legend.position = "bottom")+guides(col = guide_legend(nrow = 1, theme = theme(legend.byrow = TRUE)))
+
+onlyControlv2
+##ggsave(here("figures", "Control_density_only.jpg"), onlyControlv2, width = 6, height = 4, dpi = 600)
+
 
 ```
