@@ -1,0 +1,232 @@
+---
+title: "OrdosporaTemperatureSupportingInformation"
+author: "Elizabeth Davenport"
+date: "2025-09-12"
+output: word_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Initial stuff, including loading packages and importing data
+
+##loading packages
+```{r,message=F,warning=F}
+library(here)
+library(rstatix)
+library(ggplot2)
+library(tidyverse)
+library(dplyr)
+library(ggpubr)
+library(lubridate)
+library(scales)
+library(reshape2)
+```
+
+## loading files
+
+```{r,message=F,warning=F}
+# Tell R where files are stored
+here::i_am("scripts/OrdosporaTemperatureSupportingInformation.Rmd")
+
+# Load Files
+a <- read_csv(here("data/OP_Temp_Exp.csv"))
+pitchertemp <- read_csv(here("data/TemperatureInsidePitcher.csv"))
+c <- read_csv(here("data/OP_Temp_AUC_infection_prevalence.csv"))
+
+```
+
+```{r,message=F,warning=F}
+## Calculating densities
+a$UA_L<-(a$'UA'*a$'Total_Volume')/a$'Volume'
+a$UJ_L<-(a$'UJ'*a$'Total_Volume')/a$'Volume'
+a$UM_L<-(a$'UM'*a$'Total_Volume')/a$'Volume'
+a$OPA_L<-(a$'IA.ordo'*a$'Total_Volume')/a$'Volume'
+a$OPJ_L<-(a$'IJ.ordo'*a$'Total_Volume')/a$'Volume'
+a$OPM_L<-(a$'IM.ordo'*a$'Total_Volume')/a$'Volume'
+
+a$density<-a$UA_L+a$UJ_L+a$UM_L+a$OPA_L+a$OPJ_L+
+  a$OPM_L
+
+a$density<-rowSums(a[,c('UA_L','UJ_L','UM_L','OPA_L','OPJ_L','OPM_L')],na.rm=T)
+
+a$uninfected<-rowSums(a[,c('UA_L','UJ_L','UM_L')],na.rm=T)
+
+##infected host densities
+a$OPinfected<-rowSums(a[,c('OPA_L','OPJ_L','OPM_L')],na.rm=T)
+
+a$adults<-rowSums(a[,c('UA_L','OPA_L')],na.rm=T)
+a$juveniles<-rowSums(a[,c('UJ_L','OPJ_L')],na.rm=T)
+a$males<-rowSums(a[,c('UM_L','OPM_L')],na.rm=T)
+a$OPprev<-a$OPinfected/a$density
+a$adultOPprev<-a$OPA_L/a$adults
+a$OPtotalprev<-rowSums(a[,c('OPprev')], na.rm = T)
+a$adultOPtotalprev<-rowSums(a[,c('adultOPprev')], na.rm = T)
+
+a <- as.data.frame(a)
+a$Treatment <- as.factor(a$Treatment)
+a$Turnover <- as.factor(a$Turnover)
+a$TurnoverID <- as.factor(a$TurnoverID)
+
+```
+
+###GAM for Daphnia density before turnover
+```{r,message=F,warning=F}
+data_past49<- a[a$Day>49,] 
+data_past49$Treatment<- as.factor(data_past49$Treatment)
+data_before49<- a[a$Day<49,] 
+data_before49$Treatment<- as.factor(data_before49$Treatment)
+
+library(mgcv)
+library(Rmisc)
+library(emmeans)
+
+only.Cb4 = data_before49 %>%
+  filter(Treatment =="Control.20" | Treatment == "Control.deltaT")
+
+
+# GAM model on Daphnia density before turnover
+# interaction between treatment and day and separate smoothers for each treatment
+
+dens_gam1 <- gam(density ~ Treatment*Day + 
+             s(Day, by = as.numeric(Treatment == "Control.20"), k = 4) + 
+             s(Day, by = as.numeric(Treatment == "Control.deltaT"), k = 4), 
+           data = only.Cb4)
+
+summary(dens_gam1)
+anova(dens_gam1)
+#significant interactions between day and smoothers
+
+
+# Pairwise comparisons and contrasts between the models accros time
+EM_dens_gam1 <- emmeans(dens_gam1, ~ Treatment | Day, at = list(Day = seq(0, 48, 
+                                                                        by = 1)))
+contrast(EM_dens_gam1, method = "pairwise", adjust = "bonferroni") # pairwise contrast comparison with bonferroni correction
+contrasts_dens_gam1<-contrast(EM_dens_gam1, method = "pairwise", adjust = "bonferroni")
+# Exporting post-hoc comparisons into .csv files
+pairwise_comparisons_dens_gam1 <- as.data.frame(summary(contrasts_dens_gam1))
+write.csv(pairwise_comparisons_dens_gam1, file = "pairwise_comparisons_control_dens_gam_0_48.csv", row.names = FALSE)
+write.csv(EM_dens_gam1, file = "EM_dens_control_gam_0_48.csv", row.names = FALSE)
+
+# GAM model after turnover
+# interaction between treatment and day and separate smoothers for each treatment
+
+```
+
+
+###GAM for Daphnia density after turnover
+```{r,message=F,warning=F}
+
+# interaction between treatment and day and separate smoothers for each treatment
+data_past49$TurnoverID<-as.factor(data_past49$TurnoverID)
+only.Caf = data_past49 %>%
+  filter(Treatment =="Control.20" | Treatment == "Control.deltaT")
+
+dens_gam2 <- gam(density ~ TurnoverID*Day + 
+             s(Day, by = as.numeric(TurnoverID == "TC20"), k=4) + 
+               s(Day, by = as.numeric(TurnoverID == "TCdeltaT"), k=4)+
+             s(Day, by = as.numeric(TurnoverID == "C20"), k=4) + 
+             s(Day, by = as.numeric(TurnoverID == "CdeltaT"), k=4), 
+           data = only.Caf)
+
+summary(dens_gam2)
+anova(dens_gam2)
+#significant interactions between day and smoothers
+
+
+# Pairwise comparisons and contrasts between the models accros time
+EM_dens_gam2 <- emmeans(dens_gam2, ~ TurnoverID | Day, at = list(Day = seq(49, 84, 
+                                                                        by = 1)))
+contrast(EM_dens_gam2, method = "pairwise", adjust = "bonferroni") # pairwise contrast comparison with bonferroni correction
+contrasts_dens_gam2<-contrast(EM_dens_gam2, method = "pairwise", adjust = "bonferroni")
+# Exporting post-hoc comparisons into .csv files
+pairwise_comparisons_dens_gam2 <- as.data.frame(summary(contrasts_dens_gam2))
+write.csv(pairwise_comparisons_dens_gam2, file = "pairwise_comparisons_Control_gam_49_84_afterT.csv", row.names = FALSE)
+write.csv(EM_dens_gam2, file = "EM_Control_gam_49_84_afterT.csv", row.names = FALSE)
+```
+
+###Temperature inside DVM treatment pitcher
+```{r,message=F,warning=F}
+pitchertemp <- data.frame(pitchertemp)
+pitchertemp$Date <- as.POSIXct(pitchertemp$Date,format="%m/%d/%Y %H:%M",tz=Sys.timezone())
+pitchertemp$Temperature <- as.numeric(pitchertemp$Temperature)
+cols2 <- c("Air" = "black","Pitcher"="blue")
+
+pitchertempplot = ggplot() + 
+  geom_point(pitchertemp,mapping=aes(x=Date,y=Temperature, color = "Pitcher"), size=1) +
+  geom_line(pitchertemp,mapping=aes(x=Date,y=Temperature, color = "Pitcher"), linewidth=1) +
+  scale_colour_manual(name="",values = cols2)+
+  theme_bw() +
+  theme(panel.border = element_blank(), 
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(), 
+        axis.line = element_line(colour = "black")) +
+  scale_y_continuous(limits = c(12, 28), breaks = seq(12, 28, 2))+
+  labs(x = "Time (hours)",
+       y = (expression(bold("Temperature " ( degree*C))))) +
+  theme(axis.text=element_text(size=8, face = "bold"), 
+        axis.title=element_text(size=10,face="bold"),
+        legend.title = element_text(face = "bold",size = 12),
+        legend.text=element_text(size=10,face="bold"),
+        legend.position = "none") + 
+  scale_x_datetime(breaks = date_breaks("2 hours"), labels = date_format("%H"))
+pitchertempplot
+##ggsave("PitcherTemperatureDiurnalCycle.jpg", plot = pitchertempplot, width = 4, height = 4, dpi = 600)
+```
+
+##AUC prevalence
+```{r,message=F,warning=F}
+c <- as.data.frame(c)
+c$Treatment <- as.factor(c$Treatment)
+
+cols3 <- c("OP20"= "#F09D00","OP_turnover"= "#A14A10","OPdeltaT"="#0072B2","OPdeltaT_turnover"="#0012A0")
+level_order <- c('OP20', 'OP_turnover', 'OPdeltaT', 'OPdeltaT_turnover') 
+
+library(Rmisc)
+auc_prev_plot2<-summarySE(data = c, measurevar = "AUC", groupvars = c("Treatment"), na.rm = T)
+# the line above summarizes data within treatments and calculates sd, se and ci
+
+infprevauc<- # makes the plot
+  ggplot(auc_prev_plot2, aes(x=Treatment, y=AUC, color=Treatment)) + 
+  geom_line(position=position_dodge(.2))+
+  geom_errorbar(aes(ymin=AUC-se, ymax=AUC+se), width=0, 
+                position=position_dodge(.2)) + 
+  scale_y_continuous(limits = c(0,27), breaks = seq(0, 25, 5))+
+  scale_x_discrete(limits = level_order, labels = c("OP20"="20C", "OP_turnover"= "20C + Turnover", "OPdeltaT"="DVM", "OPdeltaT_turnover"="DVM + Turnover"))+
+  ggtitle("") +
+  ylab("Area under curve \n(prevalence x days)")+
+  xlab("Treatment")+
+  geom_point(position=position_dodge(.2), size=3)+
+  scale_color_manual(values = cols3, breaks = c("OP20", "OP_turnover", "OPdeltaT", "OPdeltaT_turnover"),labels = c("OP20"="20C", "OP_turnover"= "20C + Turnover", "OPdeltaT"="DVM", "OPdeltaT_turnover"="DVM + Turnover"))+
+  theme_classic()+
+  theme(axis.text = element_text(size = 8, colour = "black"),
+        axis.title.x = element_text(face = "bold",size = 8, colour = "black"),
+        axis.title.y = element_text(face = "bold",size = 8, colour = "black"),
+        legend.position = "none")+
+   annotate(geom="text", x=1, y=25, label="a", size=4,
+           color="black")+
+  annotate(geom="text", x=2, y=13, label="b", size=4,
+           color="black")+
+  annotate(geom="text", x=3, y=9.5, label="bc", size=4,
+           color="black")+
+  annotate(geom="text", x=4, y=5, label="c", size=4,
+           color="black")
+
+infprevauc # prints the plot
+
+##ggsave("OP_Temp_AUC_Infection_Prevalence.jpg", infprevauc, height = 4, width = 4, dpi = 600) # saves the plot
+```
+
+##AUC prevalence stats
+```{r,message=F,warning=F}
+aucprevmodel<- aov(AUC ~ Treatment, data = c) ##linear model
+summary(aucprevmodel)
+##significantly different, F value = 32.49, df = 3, p = p<0.001
+TukeyHSD(aucprevmodel)
+##significantly different pairwise comparisons: OP20-OP_turnover, OPdeltaT_turnover-OP20, OPdeltaT-OP20, OPdeltaT_turnover-OP_turnover
+
+```
+
+```

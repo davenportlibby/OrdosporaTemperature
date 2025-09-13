@@ -1,0 +1,1117 @@
+---
+title: "OrdosporaTemperatureManuscript"
+author: "Elizabeth Davenport"
+date: "2025-09-11"
+output: word_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Initial stuff, including loading packages and importing data
+
+##loading packages
+```{r,message=F,warning=F}
+library(here)
+library(rstatix)
+library(ggplot2)
+library(tidyverse)
+library(dplyr)
+library(ggpubr)
+```
+
+## loading files
+
+```{r,message=F,warning=F}
+# Tell R where files are stored
+here::i_am("scripts/OrdosporaTemperatureManuscript.Rmd")
+
+# Load Files
+a <- read_csv(here("data/OP_Temp_Exp.csv"))
+w <- read.csv(here("data/OrdosporaWalsh2021.csv"))
+d <- read_csv(here("data/OP_Temp_AUC_infected_host_densities.csv"))
+
+```
+
+
+```{r,message=F,warning=F}
+## Calculating densities
+a$UA_L<-(a$'UA'*a$'Total_Volume')/a$'Volume'
+a$UJ_L<-(a$'UJ'*a$'Total_Volume')/a$'Volume'
+a$UM_L<-(a$'UM'*a$'Total_Volume')/a$'Volume'
+a$OPA_L<-(a$'IA.ordo'*a$'Total_Volume')/a$'Volume'
+a$OPJ_L<-(a$'IJ.ordo'*a$'Total_Volume')/a$'Volume'
+a$OPM_L<-(a$'IM.ordo'*a$'Total_Volume')/a$'Volume'
+
+a$density<-a$UA_L+a$UJ_L+a$UM_L+a$OPA_L+a$OPJ_L+
+  a$OPM_L
+
+a$density<-rowSums(a[,c('UA_L','UJ_L','UM_L','OPA_L','OPJ_L','OPM_L')],na.rm=T)
+
+a$uninfected<-rowSums(a[,c('UA_L','UJ_L','UM_L')],na.rm=T)
+
+##infected host densities
+a$OPinfected<-rowSums(a[,c('OPA_L','OPJ_L','OPM_L')],na.rm=T)
+
+a$adults<-rowSums(a[,c('UA_L','OPA_L')],na.rm=T)
+a$juveniles<-rowSums(a[,c('UJ_L','OPJ_L')],na.rm=T)
+a$males<-rowSums(a[,c('UM_L','OPM_L')],na.rm=T)
+a$OPprev<-a$OPinfected/a$density
+a$adultOPprev<-a$OPA_L/a$adults
+a$OPtotalprev<-rowSums(a[,c('OPprev')], na.rm = T)
+a$adultOPtotalprev<-rowSums(a[,c('adultOPprev')], na.rm = T)
+
+a <- as.data.frame(a)
+a$Treatment <- as.factor(a$Treatment)
+a$Turnover <- as.factor(a$Turnover)
+a$TurnoverID <- as.factor(a$TurnoverID)
+
+```
+
+##Figure 4
+```{r,message=F,warning=F}
+c <- as.data.frame(c)
+
+c$Treatment <- as.factor(c$Treatment)
+
+cols3 <- c("OP20"= "#F09D00","OP_turnover"= "#A14A10","OPdeltaT"="#0072B2","OPdeltaT_turnover"="#0012A0")
+level_order <- c('OP20', 'OP_turnover', 'OPdeltaT', 'OPdeltaT_turnover') 
+
+library(Rmisc)
+auc_plot2<-summarySE(data = c, measurevar = "AUC", groupvars = c("Treatment"), na.rm = T)
+# the line above summarizes data within treatments and calculates sd, se and ci
+
+AUCinfden<- # makes the plot
+  ggplot(auc_plot2, aes(x=Treatment, y=AUC, color=Treatment)) + 
+  geom_line(position=position_dodge(.2))+
+  geom_errorbar(aes(ymin=AUC-se, ymax=AUC+se), width=0, 
+                position=position_dodge(.2)) + 
+  ##scale_y_continuous(limits = c(0,100000), breaks = seq(0, 100000, 25000))+
+  scale_x_discrete(limits = level_order, labels = c("OP20"="20C", "OP_turnover"= "20C + Turnover", "OPdeltaT"="DVM", "OPdeltaT_turnover"="DVM + Turnover"))+
+  ggtitle("") +
+  ylab("Area under curve\n(hosts x days/L)")+
+  xlab("Treatment")+
+  geom_point(position=position_dodge(.2), size=3)+
+  scale_color_manual(values = cols3, breaks = c("OP20", "OP_turnover", "OPdeltaT", "OPdeltaT_turnover"),labels = c("OP20"="20C", "OP_turnover"= "20C + Turnover", "OPdeltaT"="DVM", "OPdeltaT_turnover"="DVM + Turnover"))+
+  theme_classic()+
+  theme(axis.text = element_text(size = 8, colour = "black"),
+        axis.title.x = element_text(face = "bold",size = 8, colour = "black"),
+        axis.title.y = element_text(face = "bold",size = 8, colour = "black"),
+        legend.position = "bottom")+
+   annotate(geom="text", x=1, y=20000, label="a", size=4,
+           color="black")+
+  annotate(geom="text", x=2, y=13000, label="b", size=4,
+           color="black")+
+  annotate(geom="text", x=3, y=12000, label="b", size=4,
+           color="black")+
+  annotate(geom="text", x=4, y=5000, label="b", size=4,
+           color="black")
+
+AUCinfden # prints the plot
+
+##ggsave("Figure_4_OP_Temperature.jpg", AUCinfden, height = 4, width = 4, dpi = 600) # saves the plot
+
+
+```
+
+##Figure 1 b
+```{r,message=F,warning=F}
+OP <- a %>% filter(Treatment == "OP.20"| Treatment == "OP.deltaT")
+OP_b4 <- OP %>% filter(Day < 50)
+OP_l8tr <- OP %>% filter(Day > 48)
+
+OP_b4$Treatment <- as.factor(OP_b4$Treatment)
+
+OP_l8tr$Treatment <- as.factor(OP_l8tr$Treatment)
+OP_l8tr$Turnover <- as.factor(OP_l8tr$Turnover)
+OP_l8tr$TurnoverID <- as.factor(OP_l8tr$TurnoverID)
+
+OPcol <- c("OP.20"= "#F09D00","OP20"= "#F09D00","TOP20"= "#A14A10","OP.deltaT"="#0072B2","TOPdeltaT"="#0012A0","OPdeltaT"="#0072B2")
+
+
+onlyOPdensity <- ggplot()+
+  geom_smooth(data=OP_b4, aes(x=Day, y=density, group=Treatment, color=Treatment), span = 0.3, se=FALSE) +
+  geom_point(data=OP_b4, aes(x=Day, y=density, group=Treatment, color=Treatment), size =.5, alpha=.5)+
+  geom_smooth(data=OP_l8tr, aes(x=Day, y=density, group=TurnoverID, color=TurnoverID), span = 0.3, se=FALSE) +
+  geom_point(data=OP_l8tr, aes(x=Day, y=density, group=TurnoverID, color=TurnoverID), size =.5, alpha=.5)+
+  scale_colour_manual(values = OPcol)+
+  scale_x_continuous(limits = c(0,90), breaks = seq(0,90,10))+
+  geom_vline(xintercept = 49)+
+  theme_bw()+theme(panel.border = element_blank(), 
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(), 
+        axis.line = element_line(colour = "black"))+
+  ggtitle("(B)") +
+  labs(y=("Density (per L)"), color = ("Treatment"), linetype = "Turnover")+
+  theme(plot.title = element_text(face = "bold",size = 10),
+        axis.text=element_text(size=8, face = "bold"), 
+        axis.title=element_text(size=8,face="bold"),
+        legend.text=element_text(size=6,face="bold"),
+        legend.title=element_text(size=8,face="bold"),
+        legend.key.width = unit(1.5, 'cm'),
+        legend.position = "none")+ guides(color=guide_legend(override.aes=list(fill=NA)))
+
+onlyOPdensity
+
+```
+
+##Figure 1a
+```{r,message=F,warning=F}
+##Infection Prevalence
+OPprev<-select(a,c('Treatment','Replicate','Day','OPprev','OPinfected', 'Turnover','TurnoverID'))
+
+is.nan.data.frame <- function(x) # changes NaNs into 0
+  do.call(cbind, lapply(x, is.nan))
+OPprev[is.nan(OPprev)] <- 0
+
+OPprev <- OPprev %>% filter(Treatment == "OP.20" | Treatment == "OP.deltaT")
+
+OPprev$parasite<-'O. pajunii'
+
+OPprev_long <- OPprev %>% pivot_longer(cols = starts_with("OPprev"), names_to = "key", values_to = "prevalence") %>%
+  select(-key)
+
+combined_df <- bind_rows(OPprev_long)
+
+is.nan.data.frame <- function(x) # changes NaNs into 0
+  do.call(cbind, lapply(x, is.nan))
+combined_df[is.nan(combined_df)] <- 0
+
+opb4 <- combined_df %>% filter(Day < 50)
+opl8tr <- combined_df %>% filter(Day > 48)
+
+opb4$Treatment <- as.factor(opb4$Treatment)
+
+opl8tr$Treatment <- as.factor(opl8tr$Treatment)
+opl8tr$Turnover <- as.factor(opl8tr$Turnover)
+opl8tr$TurnoverID <- as.factor(opl8tr$TurnoverID)
+
+OPinfprev<- ggplot()+
+  geom_smooth(data=opb4, aes(x=Day, y=prevalence, group=Treatment, 
+                             colour=as.factor(Treatment)), span = 0.3, se=FALSE) +
+  geom_point(data=opb4, aes(x=Day, y=prevalence, group=Treatment, 
+                             colour=as.factor(Treatment)),size =.5,alpha=.5)+
+  geom_smooth(data=opl8tr, aes(x=Day, y=prevalence, group=TurnoverID, 
+                             colour=as.factor(TurnoverID)), span = 0.3, se=FALSE) +
+  geom_point(data=opl8tr, aes(x=Day, y=prevalence, group=TurnoverID, 
+                             colour=as.factor(TurnoverID)),size =.5,alpha=.5)+
+  scale_colour_manual(values = OPcol)+
+  scale_x_continuous(limits = c(0,90), breaks = seq(0,90,10))+
+  scale_y_continuous(limits = c(-0.1,1), breaks = seq(0,1,.1))+
+  geom_vline(xintercept = 49)+
+  theme_bw()+theme(panel.border = element_blank(), 
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(), 
+        axis.line = element_line(colour = "black"))+
+  ggtitle("(A)") +
+  labs(y=("Infection Prevalence"), colour = "Treatment")+
+  theme(plot.title = element_text(face = "bold",size = 10),
+        axis.text=element_text(size=8, face = "bold"), 
+        axis.title=element_text(size=8,face="bold"),
+        legend.text=element_text(size=6,face="bold"),
+        legend.title=element_text(size=8,face="bold"),
+        legend.key.width = unit(1.5, 'cm'),
+        legend.position = "none")+guides(color=guide_legend(nrow=2, override.aes=list(fill=NA)))
+ OPinfprev
+
+blank <- ggplot()+
+  theme_bw() +
+  theme(panel.border = element_blank(), 
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank())
+
+leg <- get_legend(AUCinfden)
+
+
+Figure1combined.plots = ggarrange(OPinfprev,onlyOPdensity,ggarrange(blank,leg, nrow = 1, ncol = 2, widths = c(100, .001)),
+                     nrow = 2, ncol = 2, widths = c(1,1),heights = c(1,.15))
+Figure1combined.plots
+
+##ggsave(here("figures", "Figure_1_OP_Temperature.jpg"), Figure1combined.plots, width = 4, height = 7, dpi = 600)
+```
+
+### Figure 2a
+```{r,message=F,warning=F}
+# Walsh Lake - Ordospora pajunii
+
+# Setting color scheme for plot
+color <- c("Mean Spore Concentration"="black",
+           "Dentifera Percent Infected"= "#0072B2")
+
+# Setting shapes for plot
+shape <-c("Mean Spore Concentration"=16,"Dentifera Percent Infected"= 15)
+
+
+micg.w = as.data.frame(w)
+DateMW <- micg.w$datetime
+lMW <- as.POSIXct(strptime(DateMW,format="%m/%d/%y",tz=Sys.timezone()))
+MeanMW <- micg.w$Mean
+LogMeanMW <- log10(MeanMW+1)
+PerInfMW <- micg.w$Dent_Per_Inf
+ratio2MW = 1.5 * with(micg.w, max(LogMeanMW)/max(PerInfMW))
+
+micg.walsh <- ggplot(micg.w) +
+  geom_point(aes(x=lMW,y=LogMeanMW, group=1, color="Mean Spore Concentration"), size=1) +
+  geom_smooth(aes(x=lMW,y=LogMeanMW, group = 1, 
+                  color="Mean Spore Concentration"),method = "loess", linewidth = .75, span=.5, se=FALSE)+
+  geom_point(aes(x=lMW,y=PerInfMW*ratio2MW, group=1,
+                 color="Dentifera Percent Infected", shape="Dentifera Percent Infected"), size=1) +
+  geom_line(aes(x=lMW,y=PerInfMW*ratio2MW, group=1,
+                color="Dentifera Percent Infected"),linewidth = .75)+
+  scale_y_continuous(name="Log(Mean Spore Concentration+1)",
+                     sec.axis = sec_axis(~ ./ratio2MW,
+                                         name="Percent Infected")) +
+  scale_x_datetime(limits = c(as.POSIXct(as.Date("2021-06-07")), as.POSIXct(as.Date("2021-11-13"))))+
+  geom_vline(xintercept = as.POSIXct(as.Date("2021-09-22")), linetype="dotted", 
+             color = "purple4", size=1)+
+  scale_colour_manual(name="",values = color)+
+  scale_shape_manual(name="",values = shape)+
+  theme_bw() +
+  theme(panel.border = element_blank(), 
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(), 
+        axis.line = element_line(colour = "black"))+
+  ##ggtitle(expression(paste(bold("Walsh:"), bolditalic(" O. pajunii")))) +
+  theme(plot.title = element_text(face = "bold",size = 6)) +
+  theme(axis.text=element_text(size=6), 
+        axis.title=element_text(size=6)) +
+  theme(legend.title = element_text(face = "bold",size = 6),
+        legend.text=element_text(size=6,face="bold"),
+        legend.position = "none") +
+  labs(x = (""))
+
+##ggsave("Ordospora_Walsh_v2.jpg", plot = micg.walsh, width = 3, height = 3, dpi = 600)
+```
+
+##Figure 3
+```{r,message=F,warning=F}
+
+##Infection Prevalence OP20 1
+
+OP1.prev = a %>%
+  filter(ID == "OP20.1")
+
+
+OP1 <- ggplot(data=OP1.prev) +
+  geom_point(aes(x=Day,y=OPinfected, group=Treatment),
+                 color="#F09D00", size=1) +
+  geom_point(aes(x=Day,y=density, group=Treatment),
+                 color="#F09D00", shape = 7, size=1) +
+  geom_line(aes(x=Day,y=OPinfected, group=Treatment),
+                color="#F09D00",size=1)+
+  geom_area(aes(x=Day,y=OPinfected, group=Treatment), 
+                                fill="#F09D00", size=1, alpha=.5) +
+  geom_line(aes(x=Day,y=density, group = Treatment),
+                  color="#F09D00", size = 1)+
+    ggtitle("20C + Turnover")+
+  geom_vline(xintercept = 49)+
+  scale_y_continuous(breaks = seq(0,2500,500), limits = c(-0.05, 2800),name="Density (per L)") +
+  theme_bw() +
+  theme(panel.border = element_blank(), 
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(), 
+        plot.title = element_text(size=10, face="bold"),
+        axis.line = element_line(colour = "black"),
+        axis.text=element_text(size=8, face = "bold"), 
+        axis.title=element_text(size=10,face="bold"),
+        legend.text=element_text(size=8,face="bold"),
+        legend.position = "bottom",
+        legend.title = element_blank())+
+  labs(x = (""))
+
+##Infection Prevalence OP20 2
+
+OP2.prev = a %>%
+  filter(ID == "OP20.2")
+
+
+OP2 <- ggplot(data=OP2.prev) +
+  geom_point(aes(x=Day,y=OPinfected, group=Treatment),
+                 color="#F09D00", size=1) +
+  geom_point(aes(x=Day,y=density, group=Treatment),
+                 color="#F09D00", shape = 7, size=1) +
+  geom_line(aes(x=Day,y=OPinfected, group=Treatment),
+                color="#F09D00",size=1)+
+  geom_area(aes(x=Day,y=OPinfected, group=Treatment), 
+                                fill="#F09D00", size=1, alpha=.5) +
+  geom_line(aes(x=Day,y=density, group = Treatment),
+                  color="#F09D00", size = 1)+
+  ##geom_vline(xintercept = 49)+
+    ggtitle("20C")+
+  scale_y_continuous(breaks = seq(0,2500,500), limits = c(-0.05, 2800),name="Density (per L)") +
+  theme_bw() +
+  theme(panel.border = element_blank(), 
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),        
+        plot.title = element_text(size=10, face="bold"),
+        axis.line = element_line(colour = "black"),
+        axis.text=element_text(size=8, face = "bold"), 
+        axis.title=element_text(size=10,face="bold"),
+        legend.text=element_text(size=8,face="bold"),
+        legend.position = "bottom",
+        legend.title = element_blank())+
+  labs(x = (""))
+
+
+##Infection Prevalence OP20 3
+
+OP3.prev = a %>%
+  filter(ID == "OP20.3")
+
+
+OP3 <- ggplot(data=OP3.prev) +
+  geom_point(aes(x=Day,y=OPinfected, group=Treatment),
+                 color="#F09D00", size=1) +
+  geom_point(aes(x=Day,y=density, group=Treatment),
+                 color="#F09D00", shape = 7, size=1) +
+  geom_line(aes(x=Day,y=OPinfected, group=Treatment),
+                color="#F09D00",size=1)+
+  geom_area(aes(x=Day,y=OPinfected, group=Treatment), 
+                                fill="#F09D00", size=1, alpha=.5) +
+  geom_line(aes(x=Day,y=density, group = Treatment),
+                  color="#F09D00", size = 1)+
+  geom_vline(xintercept = 49)+
+  scale_y_continuous(breaks = seq(0,2500,500), limits = c(-0.05, 2800),name="") +
+  theme_bw() +
+  theme(panel.border = element_blank(), 
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(), 
+        axis.line = element_line(colour = "black"),
+        axis.text=element_text(size=8, face = "bold"), 
+        axis.title=element_text(size=10,face="bold"),
+        legend.text=element_text(size=8,face="bold"),
+        legend.position = "bottom",
+        legend.title = element_blank())+
+  labs(x = (""))
+
+
+##Infection Prevalence OP20 4
+
+OP4.prev = a %>%
+  filter(ID == "OP20.4")
+
+
+OP4 <- ggplot(data=OP4.prev) +
+  geom_point(aes(x=Day,y=OPinfected, group=Treatment),
+                 color="#F09D00", size=1) +
+  geom_point(aes(x=Day,y=density, group=Treatment),
+                 color="#F09D00", shape = 7, size=1) +
+  geom_line(aes(x=Day,y=OPinfected, group=Treatment),
+                color="#F09D00",size=1)+
+  geom_area(aes(x=Day,y=OPinfected, group=Treatment), 
+                                fill="#F09D00", size=1, alpha=.5) +
+  geom_line(aes(x=Day,y=density, group = Treatment),
+                  color="#F09D00", size = 1)+
+  ##geom_vline(xintercept = 49)+
+  scale_y_continuous(breaks = seq(0,2500,500), limits = c(-0.05, 2800),name="") +
+  theme_bw() +
+  theme(panel.border = element_blank(), 
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(), 
+        axis.line = element_line(colour = "black"),
+        axis.text=element_text(size=8, face = "bold"), 
+        axis.title=element_text(size=10,face="bold"),
+        legend.text=element_text(size=8,face="bold"),
+        legend.position = "bottom",
+        legend.title = element_blank())+
+  labs(x = (""))
+
+##Infection Prevalence OP20 5
+
+OP5.prev = a %>%
+  filter(ID == "OP20.5")
+
+
+OP5 <- ggplot(data=OP5.prev) +
+  geom_point(aes(x=Day,y=OPinfected, group=Treatment),
+                 color="#F09D00", size=1) +
+  geom_point(aes(x=Day,y=density, group=Treatment),
+                 color="#F09D00", shape = 7, size=1) +
+  geom_line(aes(x=Day,y=OPinfected, group=Treatment),
+                color="#F09D00",size=1)+
+  geom_area(aes(x=Day,y=OPinfected, group=Treatment), 
+                                fill="#F09D00", size=1, alpha=.5) +
+  geom_line(aes(x=Day,y=density, group = Treatment),
+                  color="#F09D00", size = 1)+
+  geom_vline(xintercept = 49)+
+  scale_y_continuous(breaks = seq(0,2500,500), limits = c(-0.05, 2800),name="") +
+  theme_bw() +
+  theme(panel.border = element_blank(), 
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(), 
+        axis.line = element_line(colour = "black"),
+        axis.text=element_text(size=8, face = "bold"), 
+        axis.title=element_text(size=10,face="bold"),
+        legend.text=element_text(size=8,face="bold"),
+        legend.position = "bottom",
+        legend.title = element_blank())+
+  labs(x = (""))
+
+
+##Infection Prevalence OP20 6
+
+OP6.prev = a %>%
+  filter(ID == "OP20.6")
+
+
+OP6 <- ggplot(data=OP6.prev) +
+  geom_point(aes(x=Day,y=OPinfected, group=Treatment),
+                 color="#F09D00", size=1) +
+  geom_point(aes(x=Day,y=density, group=Treatment),
+                 color="#F09D00", shape = 7, size=1) +
+  geom_line(aes(x=Day,y=OPinfected, group=Treatment),
+                color="#F09D00",size=1)+
+  geom_area(aes(x=Day,y=OPinfected, group=Treatment), 
+                                fill="#F09D00", size=1, alpha=.5) +
+  geom_line(aes(x=Day,y=density, group = Treatment),
+                  color="#F09D00", size = 1)+
+  ##geom_vline(xintercept = 49)+
+  scale_y_continuous(breaks = seq(0,2500,500), limits = c(-0.05, 2800),name="") +
+  theme_bw() +
+  theme(panel.border = element_blank(), 
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(), 
+        axis.line = element_line(colour = "black"),
+        axis.text=element_text(size=8, face = "bold"), 
+        axis.title=element_text(size=10,face="bold"),
+        legend.text=element_text(size=8,face="bold"),
+        legend.position = "bottom",
+        legend.title = element_blank())+
+  labs(x = (""))
+
+
+
+##Infection Prevalence OP20 7
+
+OP7.prev = a %>%
+  filter(ID == "OP20.7")
+
+
+OP7 <- ggplot(data=OP7.prev) +
+  geom_point(aes(x=Day,y=OPinfected, group=Treatment),
+                 color="#F09D00", size=1) +
+  geom_point(aes(x=Day,y=density, group=Treatment),
+                 color="#F09D00", shape = 7, size=1) +
+  geom_line(aes(x=Day,y=OPinfected, group=Treatment),
+                color="#F09D00",size=1)+
+  geom_area(aes(x=Day,y=OPinfected, group=Treatment), 
+                                fill="#F09D00", size=1, alpha=.5) +
+  geom_line(aes(x=Day,y=density, group = Treatment),
+                  color="#F09D00", size = 1)+
+  geom_vline(xintercept = 49)+
+  scale_y_continuous(breaks = seq(0,2500,500), limits = c(-0.05, 2800),name="") +
+  theme_bw() +
+  theme(panel.border = element_blank(), 
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(), 
+        axis.line = element_line(colour = "black"),
+        axis.text=element_text(size=8, face = "bold"), 
+        axis.title=element_text(size=10,face="bold"),
+        legend.text=element_text(size=8,face="bold"),
+        legend.position = "bottom",
+        legend.title = element_blank())+
+  labs(x = (""))
+
+
+##Infection Prevalence OP20 8
+
+OP8.prev = a %>%
+  filter(ID == "OP20.8")
+
+
+OP8 <- ggplot(data=OP8.prev) +
+  geom_point(aes(x=Day,y=OPinfected, group=Treatment),
+                 color="#F09D00", size=1) +
+  geom_point(aes(x=Day,y=density, group=Treatment),
+                 color="#F09D00", shape = 7, size=1) +
+  geom_line(aes(x=Day,y=OPinfected, group=Treatment),
+                color="#F09D00",size=1)+
+  geom_area(aes(x=Day,y=OPinfected, group=Treatment), 
+                                fill="#F09D00", size=1, alpha=.5) +
+  geom_line(aes(x=Day,y=density, group = Treatment),
+                  color="#F09D00", size = 1)+
+  ##geom_vline(xintercept = 49)+
+  scale_y_continuous(breaks = seq(0,2500,500), limits = c(-0.05, 2800),name="") +
+  theme_bw() +
+  theme(panel.border = element_blank(), 
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(), 
+        axis.line = element_line(colour = "black"),
+        axis.text=element_text(size=8, face = "bold"), 
+        axis.title=element_text(size=10,face="bold"),
+        legend.text=element_text(size=8,face="bold"),
+        legend.position = "bottom",
+        legend.title = element_blank())+
+  labs(x = (""))
+
+
+##Infection Prevalence OP20 9
+
+OP9.prev = a %>%
+  filter(ID == "OP20.9")
+
+
+OP9 <- ggplot(data=OP9.prev) +
+  geom_point(aes(x=Day,y=OPinfected, group=Treatment),
+                 color="#F09D00", size=1) +
+  geom_point(aes(x=Day,y=density, group=Treatment),
+                 color="#F09D00", shape = 7, size=1) +
+  geom_line(aes(x=Day,y=OPinfected, group=Treatment),
+                color="#F09D00",size=1)+
+  geom_area(aes(x=Day,y=OPinfected, group=Treatment), 
+                                fill="#F09D00", size=1, alpha=.5) +
+  geom_line(aes(x=Day,y=density, group = Treatment),
+                  color="#F09D00", size = 1)+
+  geom_vline(xintercept = 49)+
+  scale_y_continuous(breaks = seq(0,2500,500), limits = c(-0.05, 2800),name="") +
+  theme_bw() +
+  theme(panel.border = element_blank(), 
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(), 
+        axis.line = element_line(colour = "black"),
+        axis.text=element_text(size=8, face = "bold"), 
+        axis.title=element_text(size=10,face="bold"),
+        legend.text=element_text(size=8,face="bold"),
+        legend.position = "bottom",
+        legend.title = element_blank())+
+  labs(x = (""))
+
+
+##Infection Prevalence OP20 10
+
+OP10.prev = a %>%
+  filter(ID == "OP20.10")
+
+
+OP10 <- ggplot(data=OP10.prev) +
+  geom_point(aes(x=Day,y=OPinfected, group=Treatment),
+                 color="#F09D00", size=1) +
+  geom_point(aes(x=Day,y=density, group=Treatment),
+                 color="#F09D00", shape = 7, size=1) +
+  geom_line(aes(x=Day,y=OPinfected, group=Treatment),
+                color="#F09D00",size=1)+
+  geom_area(aes(x=Day,y=OPinfected, group=Treatment), 
+                                fill="#F09D00", size=1, alpha=.5) +
+  geom_line(aes(x=Day,y=density, group = Treatment),
+                  color="#F09D00", size = 1)+
+  ##geom_vline(xintercept = 49)+
+  scale_y_continuous(breaks = seq(0,2500,500), limits = c(-0.05, 2800),name="") +
+  theme_bw() +
+  theme(panel.border = element_blank(), 
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(), 
+        axis.line = element_line(colour = "black"),
+        axis.text=element_text(size=8, face = "bold"), 
+        axis.title=element_text(size=10,face="bold"),
+        legend.text=element_text(size=8,face="bold"),
+        legend.position = "bottom",
+        legend.title = element_blank())+
+  labs(x = (""))
+
+##Infection Prevalence delta T 1
+
+dT1.prev = a %>%
+  filter(ID == "OPdeltaT.1")
+
+
+dT1 <- ggplot(data=dT1.prev) +
+  geom_point(aes(x=Day,y=OPinfected, group=Treatment),
+                 color="#0072B2", size=1) +
+  geom_point(aes(x=Day,y=density, group=Treatment),
+                 color="#0072B2", shape = 7, size=1) +
+  geom_line(aes(x=Day,y=OPinfected, group=Treatment),
+                color="#0072B2",size=1)+
+  geom_area(aes(x=Day,y=OPinfected, group=Treatment), 
+                                fill="#0072B2", size=1, alpha=.5) +
+  geom_line(aes(x=Day,y=density, group = Treatment),
+                  color="#0072B2", size = 1)+
+  geom_vline(xintercept = 49)+
+  scale_y_continuous(breaks = seq(0,2500,500), limits = c(-0.05, 2800),name="Density (per L)") +
+  theme_bw() +
+  ggtitle("DVM + Turnover")+
+  theme(panel.border = element_blank(), 
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(), 
+        plot.title = element_text(size=10, face="bold"),
+        axis.line = element_line(colour = "black"),
+        axis.text=element_text(size=8, face = "bold"), 
+        axis.title=element_text(size=10,face="bold"),
+        legend.text=element_text(size=8,face="bold"),
+        legend.position = "bottom",
+        legend.title = element_blank())+
+  labs(x = (""))
+
+##Infection Prevalence delta T 2
+
+dT2.prev = a %>%
+  filter(ID == "OPdeltaT.2")
+
+
+dT2 <- ggplot(data=dT2.prev) +
+  geom_point(aes(x=Day,y=OPinfected, group=Treatment),
+                 color="#0072B2", size=1) +
+  geom_point(aes(x=Day,y=density, group=Treatment),
+                 color="#0072B2", shape = 7, size=1) +
+  geom_line(aes(x=Day,y=OPinfected, group=Treatment),
+                color="#0072B2",size=1)+
+  geom_area(aes(x=Day,y=OPinfected, group=Treatment), 
+                                fill="#0072B2", size=1, alpha=.5) +
+  geom_line(aes(x=Day,y=density, group = Treatment),
+                  color="#0072B2", size = 1)+
+    ggtitle("DVM")+
+  ##geom_vline(xintercept = 49)+
+  scale_y_continuous(breaks = seq(0,2500,500), limits = c(-0.05, 2800),name="Density (per L)") +
+  theme_bw() +
+  theme(panel.border = element_blank(), 
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(), 
+        plot.title = element_text(size=10, face="bold"),
+        axis.line = element_line(colour = "black"),
+        axis.text=element_text(size=8, face = "bold"), 
+        axis.title=element_text(size=10,face="bold"),
+        legend.text=element_text(size=8,face="bold"),
+        legend.position = "bottom",
+        legend.title = element_blank())+
+  labs(x = (""))
+
+
+##Infection Prevalence delta T 3
+
+dT3.prev = a %>%
+  filter(ID == "OPdeltaT.3")
+
+
+dT3 <- ggplot(data=dT3.prev) +
+  geom_point(aes(x=Day,y=OPinfected, group=Treatment),
+                 color="#0072B2", size=1) +
+  geom_point(aes(x=Day,y=density, group=Treatment),
+                 color="#0072B2", shape = 7, size=1) +
+  geom_line(aes(x=Day,y=OPinfected, group=Treatment),
+                color="#0072B2",size=1)+
+  geom_area(aes(x=Day,y=OPinfected, group=Treatment), 
+                                fill="#0072B2", size=1, alpha=.5) +
+  geom_line(aes(x=Day,y=density, group = Treatment),
+                  color="#0072B2", size = 1)+
+  geom_vline(xintercept = 49)+
+  scale_y_continuous(breaks = seq(0,2500,500), limits = c(-0.05, 2800),name="") +
+  theme_bw() +
+  theme(panel.border = element_blank(), 
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(), 
+        axis.line = element_line(colour = "black"),
+        axis.text=element_text(size=8, face = "bold"), 
+        axis.title=element_text(size=10,face="bold"),
+        legend.text=element_text(size=8,face="bold"),
+        legend.position = "bottom",
+        legend.title = element_blank())+
+  labs(x = (""))
+
+##Infection Prevalence delta T 4
+
+dT4.prev = a %>%
+  filter(ID == "OPdeltaT.4")
+
+
+dT4 <- ggplot(data=dT4.prev) +
+  geom_point(aes(x=Day,y=OPinfected, group=Treatment),
+                 color="#0072B2", size=1) +
+  geom_point(aes(x=Day,y=density, group=Treatment),
+                 color="#0072B2", shape = 7, size=1) +
+  geom_line(aes(x=Day,y=OPinfected, group=Treatment),
+                color="#0072B2",size=1)+
+  geom_area(aes(x=Day,y=OPinfected, group=Treatment), 
+                                fill="#0072B2", size=1, alpha=.5) +
+  geom_line(aes(x=Day,y=density, group = Treatment),
+                  color="#0072B2", size = 1)+
+  ##geom_vline(xintercept = 49)+
+  scale_y_continuous(breaks = seq(0,2500,500), limits = c(-0.05, 2800),name="") +
+  theme_bw() +
+  theme(panel.border = element_blank(), 
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(), 
+        axis.line = element_line(colour = "black"),
+        axis.text=element_text(size=8, face = "bold"), 
+        axis.title=element_text(size=10,face="bold"),
+        legend.text=element_text(size=8,face="bold"),
+        legend.position = "bottom",
+        legend.title = element_blank())+
+  labs(x = (""))
+
+
+##Infection Prevalence delta T 5
+
+dT5.prev = a %>%
+  filter(ID == "OPdeltaT.5")
+
+
+dT5 <- ggplot(data=dT5.prev) +
+  geom_point(aes(x=Day,y=OPinfected, group=Treatment),
+                 color="#0072B2", size=1) +
+  geom_point(aes(x=Day,y=density, group=Treatment),
+                 color="#0072B2", shape = 7, size=1) +
+  geom_line(aes(x=Day,y=OPinfected, group=Treatment),
+                color="#0072B2",size=1)+
+  geom_area(aes(x=Day,y=OPinfected, group=Treatment), 
+                                fill="#0072B2", size=1, alpha=.5) +
+  geom_line(aes(x=Day,y=density, group = Treatment),
+                  color="#0072B2", size = 1)+
+  geom_vline(xintercept = 49)+
+  scale_y_continuous(breaks = seq(0,2500,500), limits = c(-0.05, 2800),name="") +
+  theme_bw() +
+  theme(panel.border = element_blank(), 
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(), 
+        axis.line = element_line(colour = "black"),
+        axis.text=element_text(size=8, face = "bold"), 
+        axis.title=element_text(size=10,face="bold"),
+        legend.text=element_text(size=8,face="bold"),
+        legend.position = "bottom",
+        legend.title = element_blank())+
+  labs(x = ("Day"))
+
+
+##Infection Prevalence delta T 6
+
+dT6.prev = a %>%
+  filter(ID == "OPdeltaT.6")
+
+
+dT6 <- ggplot(data=dT6.prev) +
+  geom_point(aes(x=Day,y=OPinfected, group=Treatment),
+                 color="#0072B2", size=1) +
+  geom_point(aes(x=Day,y=density, group=Treatment),
+                 color="#0072B2", shape = 7, size=1) +
+  geom_line(aes(x=Day,y=OPinfected, group=Treatment),
+                color="#0072B2",size=1)+
+  geom_area(aes(x=Day,y=OPinfected, group=Treatment), 
+                                fill="#0072B2", size=1, alpha=.5) +
+  geom_line(aes(x=Day,y=density, group = Treatment),
+                  color="#0072B2", size = 1)+
+  ##geom_vline(xintercept = 49)+
+  scale_y_continuous(breaks = seq(0,2500,500), limits = c(-0.05, 2800),name="") +
+  theme_bw() +
+  theme(panel.border = element_blank(), 
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(), 
+        axis.line = element_line(colour = "black"),
+        axis.text=element_text(size=8, face = "bold"), 
+        axis.title=element_text(size=10,face="bold"),
+        legend.text=element_text(size=8,face="bold"),
+        legend.position = "bottom",
+        legend.title = element_blank())+
+  labs(x = (""))
+
+
+##Infection Prevalence delta T 7
+
+dT7.prev = a %>%
+  filter(ID == "OPdeltaT.7")
+
+
+dT7 <- ggplot(data=dT7.prev) +
+  geom_point(aes(x=Day,y=OPinfected, group=Treatment),
+                 color="#0072B2", size=1) +
+  geom_point(aes(x=Day,y=density, group=Treatment),
+                 color="#0072B2", shape = 7, size=1) +
+  geom_line(aes(x=Day,y=OPinfected, group=Treatment),
+                color="#0072B2",size=1)+
+  geom_area(aes(x=Day,y=OPinfected, group=Treatment), 
+                                fill="#0072B2", size=1, alpha=.5) +
+  geom_line(aes(x=Day,y=density, group = Treatment),
+                  color="#0072B2", size = 1)+
+  geom_vline(xintercept = 49)+
+  scale_y_continuous(breaks = seq(0,2500,500), limits = c(-0.05, 2800),name="") +
+  theme_bw() +
+  theme(panel.border = element_blank(), 
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(), 
+        axis.line = element_line(colour = "black"),
+        axis.text=element_text(size=8, face = "bold"), 
+        axis.title=element_text(size=10,face="bold"),
+        legend.text=element_text(size=8,face="bold"),
+        legend.position = "bottom",
+        legend.title = element_blank())+
+  labs(x = (""))
+
+
+##Infection Prevalence delta T 8
+
+dT8.prev = a %>%
+  filter(ID == "OPdeltaT.8")
+
+
+dT8 <- ggplot(data=dT8.prev) +
+  geom_point(aes(x=Day,y=OPinfected, group=Treatment),
+                 color="#0072B2", size=1) +
+  geom_point(aes(x=Day,y=density, group=Treatment),
+                 color="#0072B2", shape = 7, size=1) +
+  geom_line(aes(x=Day,y=OPinfected, group=Treatment),
+                color="#0072B2",size=1)+
+  geom_area(aes(x=Day,y=OPinfected, group=Treatment), 
+                                fill="#0072B2", size=1, alpha=.5) +
+  geom_line(aes(x=Day,y=density, group = Treatment),
+                  color="#0072B2", size = 1)+
+  ##geom_vline(xintercept = 49)+
+  scale_y_continuous(breaks = seq(0,2500,500), limits = c(-0.05, 2800),name="") +
+  theme_bw() +
+  theme(panel.border = element_blank(), 
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(), 
+        axis.line = element_line(colour = "black"),
+        axis.text=element_text(size=8, face = "bold"), 
+        axis.title=element_text(size=10,face="bold"),
+        legend.text=element_text(size=8,face="bold"),
+        legend.position = "bottom",
+        legend.title = element_blank())+
+  labs(x = (""))
+
+
+##Infection Prevalence delta T 9
+
+dT9.prev = a %>%
+  filter(ID == "OPdeltaT.9")
+
+
+dT9 <- ggplot(data=dT9.prev) +
+  geom_point(aes(x=Day,y=OPinfected, group=Treatment),
+                 color="#0072B2", size=1) +
+  geom_point(aes(x=Day,y=density, group=Treatment),
+                 color="#0072B2", shape = 7, size=1) +
+  geom_line(aes(x=Day,y=OPinfected, group=Treatment),
+                color="#0072B2",size=1)+
+  geom_area(aes(x=Day,y=OPinfected, group=Treatment), 
+                                fill="#0072B2", size=1, alpha=.5) +
+  geom_line(aes(x=Day,y=density, group = Treatment),
+                  color="#0072B2", size = 1)+
+  geom_vline(xintercept = 49)+
+  scale_y_continuous(breaks = seq(0,2500,500), limits = c(-0.05, 2800),name="") +
+  theme_bw() +
+  theme(panel.border = element_blank(), 
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(), 
+        axis.line = element_line(colour = "black"),
+        axis.text=element_text(size=8, face = "bold"), 
+        axis.title=element_text(size=10,face="bold"),
+        legend.text=element_text(size=8,face="bold"),
+        legend.position = "bottom",
+        legend.title = element_blank())+
+  labs(x = (""))
+
+
+##Infection Prevalence delta T 10
+dT10.prev = a %>%
+  filter(ID == "OPdeltaT.10")
+
+dT10 <- ggplot(data=dT10.prev) +
+  geom_point(aes(x=Day,y=OPinfected, group=Treatment),
+                 color="#0072B2", size=1) +
+  geom_point(aes(x=Day,y=density, group=Treatment),
+                 color="#0072B2", shape = 7, size=1) +
+  geom_line(aes(x=Day,y=OPinfected, group=Treatment),
+                color="#0072B2",size=1)+
+  geom_area(aes(x=Day,y=OPinfected, group=Treatment), 
+                                fill="#0072B2", size=1, alpha=.5) +
+  geom_line(aes(x=Day,y=density, group = Treatment),
+                  color="#0072B2", size = 1)+
+  ##geom_vline(xintercept = 49)+
+  scale_y_continuous(breaks = seq(0,2500,500), limits = c(-0.05, 2800),name="") +
+  theme_bw() +
+  theme(panel.border = element_blank(), 
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(), 
+        axis.line = element_line(colour = "black"),
+        axis.text=element_text(size=8, face = "bold"), 
+        axis.title=element_text(size=10,face="bold"),
+        legend.text=element_text(size=8,face="bold"),
+        legend.position = "bottom",
+        legend.title = element_blank())+
+  labs(x = (""))
+
+
+combined.plots3 = ggarrange(OP2,OP4, OP6, OP8, OP10,
+                            OP1, OP3, OP5, OP7, OP9,
+                            dT2, dT4, dT6, dT8, dT10,
+                            dT1, dT3, dT5, dT7, dT9,
+                     nrow = 4, ncol = 5, common.legend = TRUE, legend="none")
+combined.plots3
+##ggsave(here("figures", "Figure_3_Ordospora_Temperature.jpg"), combined.plots3, width = 11, height = 8, dpi = 600)
+
+```
+
+
+##Figure 4
+```{r,message=F,warning=F}
+d <- as.data.frame(d)
+d$Treatment <- as.factor(d$Treatment)
+
+cols3 <- c("OP20"= "#F09D00","OP_turnover"= "#A14A10","OPdeltaT"="#0072B2","OPdeltaT_turnover"="#0012A0")
+level_order <- c('OP20', 'OP_turnover', 'OPdeltaT', 'OPdeltaT_turnover') 
+
+library(Rmisc)
+auc_plot2<-summarySE(data = d, measurevar = "AUC", groupvars = c("Treatment"), na.rm = T)
+# the line above summarizes data within treatments and calculates sd, se and ci
+
+aucinfdenplot<- # makes the plot
+  ggplot(auc_plot2, aes(x=Treatment, y=AUC, color=Treatment)) + 
+  geom_line(position=position_dodge(.2))+
+  geom_errorbar(aes(ymin=AUC-se, ymax=AUC+se), width=0, 
+                position=position_dodge(.2)) + 
+  scale_x_discrete(limits = level_order, labels = c("OP20"="20C", "OP_turnover"= "20C + Turnover", "OPdeltaT"="DVM", "OPdeltaT_turnover"="DVM + Turnover"))+
+  ggtitle("") +
+  ylab("Area under curve\n(hosts x days/L)")+
+  xlab("Treatment")+
+  geom_point(position=position_dodge(.2), size=3)+
+  scale_color_manual(values = cols3, breaks = c("OP20", "OP_turnover", "OPdeltaT", "OPdeltaT_turnover"),labels = c("OP20"="20C", "OP_turnover"= "20C + Turnover", "OPdeltaT"="DVM", "OPdeltaT_turnover"="DVM + Turnover"))+
+  theme_classic()+
+  theme(axis.text = element_text(size = 8, colour = "black"),
+        axis.title.x = element_text(face = "bold",size = 8, colour = "black"),
+        axis.title.y = element_text(face = "bold",size = 8, colour = "black"),
+        legend.position = "none")+
+   annotate(geom="text", x=1, y=20000, label="a", size=4,
+           color="black")+
+  annotate(geom="text", x=2, y=13000, label="b", size=4,
+           color="black")+
+  annotate(geom="text", x=3, y=12000, label="b", size=4,
+           color="black")+
+  annotate(geom="text", x=4, y=5000, label="b", size=4,
+           color="black")
+
+aucinfdenplot # prints the plot
+##ggsave("Figure_4_Ordospora_Temperature.jpg", aucinfdenplot, height = 4, width = 4, dpi = 600) # saves the plot
+```
+
+
+##AUC Infected Host Density Stats
+```{r,message=F,warning=F}
+a2<- aov(AUC ~ Treatment, data = d) ##linear model
+summary(a2)
+##Anova(a2, type = 2)
+##significantly different, F value = 9.6, df = 3, p = p<0.001
+##df denominator = 20 observations - 4 groups = 16
+
+TukeyHSD(a2)
+##significantly different pairwise comparisons: OP20-OP_turnover, OPdeltaT_turnover-OP20, OPdeltaT-OP20
+```
+
+###GAMS for total host density and Ordospora prevalence
+```{r,message=F,warning=F}
+data_past49<- a[a$Day>49,] 
+data_past49$Treatment<- as.factor(data_past49$Treatment)
+data_before49<- a[a$Day<49,] 
+data_before49$Treatment<- as.factor(data_before49$Treatment)
+
+library(mgcv)
+library(Rmisc)
+library(emmeans)
+
+only.OPb4 = data_before49 %>%
+  filter(Treatment =="OP.20" | Treatment == "OP.deltaT")
+
+
+# GAM model on Daphnia density
+# interaction between treatment and day and separate smoothers for each treatment
+
+dens_gam1 <- gam(density ~ Treatment*Day + 
+             s(Day, by = as.numeric(Treatment == "OP.20"), k = 4) + 
+             s(Day, by = as.numeric(Treatment == "OP.deltaT"), k = 4), 
+           data = only.OPb4)
+
+summary(dens_gam1)
+anova(dens_gam1)
+#significant interactions between day and smoothers
+
+
+# Pairwise comparisons and contrasts between the models across time
+EM_dens_gam1 <- emmeans(dens_gam1, ~ Treatment | Day, at = list(Day = seq(0, 48, 
+                                                                        by = 1)))
+contrast(EM_dens_gam1, method = "pairwise", adjust = "bonferroni") # pairwise contrast comparison with bonferroni correction
+contrasts_dens_gam1<-contrast(EM_dens_gam1, method = "pairwise", adjust = "bonferroni")
+# Exporting post-hoc comparisons into .csv files
+pairwise_comparisons_dens_gam1 <- as.data.frame(summary(contrasts_dens_gam1))
+write.csv(pairwise_comparisons_dens_gam1, file = "OPTemppairwise_comparisons_dens_gam_0_48.csv", row.names = FALSE)
+write.csv(EM_dens_gam1, file = "OPTempEM_dens_gam_0_48.csv", row.names = FALSE)
+
+# GAM model on OP prevalence
+# interaction between treatment and day and separate smoothers for each treatment
+
+prev_gam <- gam(OPtotalprev ~ Treatment*Day + 
+             s(Day, by = as.numeric(Treatment == "OP.20"), k = 6) + 
+             s(Day, by = as.numeric(Treatment == "OP.deltaT"), k = 6), 
+           data = only.OPb4)
+
+summary(prev_gam)
+anova(prev_gam)
+#significant interactions between day and smoothers
+
+
+# Pairwise comparisons and contrasts between the models across time
+EM_prev_gam <- emmeans(prev_gam, ~ Treatment | Day, at = list(Day = seq(0, 49, 
+                                                                        by = 1)))
+contrast(EM_prev_gam, method = "pairwise", adjust = "bonferroni") # pairwise contrast comparison with bonferroni correction
+contrastsEM_prev_gam<-contrast(EM_prev_gam, method = "pairwise", adjust = "bonferroni")
+# Exporting post-hoc comparisons into .csv files
+pairwise_comparisonsEM_prev_gam <- as.data.frame(summary(contrastsEM_prev_gam))
+write.csv(pairwise_comparisonsEM_prev_gam, file = "OPTemppairwise_comparisons_prev_0_49_v2.csv", row.names = FALSE)
+write.csv(EM_prev_gam, file = "OPTempEM_prev_gam_0_49_v2.csv", row.names = FALSE)
+```
+
+##GAMS after turnover
+```{r,message=F,warning=F}
+
+# GAM model on Daphnia density
+# interaction between treatment and day and separate smoothers for each treatment
+
+data_past49$TurnoverID<-as.factor(data_past49$TurnoverID)
+only.OPaf = data_past49 %>%
+  filter(Treatment =="OP.20" | Treatment == "OP.deltaT")
+
+dens_gam2 <- gam(density ~ TurnoverID*Day + 
+             s(Day, by = as.numeric(TurnoverID == "TOP20"), k=5) + 
+               s(Day, by = as.numeric(TurnoverID == "TOPdeltaT"), k=5)+
+             s(Day, by = as.numeric(TurnoverID == "OP20"), k=5) + 
+             s(Day, by = as.numeric(TurnoverID == "OPdeltaT"), k=5), 
+           data = only.OPaf)
+
+summary(dens_gam2)
+anova(dens_gam2)
+#significant interactions between day and smoothers
+
+
+# Pairwise comparisons and contrasts between the models across time
+EM_dens_gam2 <- emmeans(dens_gam2, ~ TurnoverID | Day, at = list(Day = seq(49, 84, 
+                                                                        by = 1)))
+contrast(EM_dens_gam2, method = "pairwise", adjust = "bonferroni") # pairwise contrast comparison with bonferroni correction
+contrasts_dens_gam2<-contrast(EM_dens_gam2, method = "pairwise", adjust = "bonferroni")
+# Exporting post-hoc comparisons into .csv files
+pairwise_comparisons_dens_gam2 <- as.data.frame(summary(contrasts_dens_gam2))
+write.csv(pairwise_comparisons_dens_gam2, file = "OPTemppairwise_comparisons_density_gam_49_84_afterT.csv", row.names = FALSE)
+write.csv(EM_dens_gam2, file = "OPTempEM_density_gam_49_84_afterT.csv", row.names = FALSE)
+
+
+
+OPprev_gam2 <- gam(OPtotalprev ~ TurnoverID*Day + 
+             s(Day, by = as.numeric(TurnoverID == "TOP20"), k=5) + 
+               s(Day, by = as.numeric(TurnoverID == "TOPdeltaT"), k=5)+
+             s(Day, by = as.numeric(TurnoverID == "OP20"), k=5) + 
+             s(Day, by = as.numeric(TurnoverID == "OPdeltaT"), k=5), 
+           data = only.OPaf)
+
+summary(OPprev_gam2)
+anova(OPprev_gam2)
+#significant interactions between day and smoothers
+
+
+# Pairwise comparisons and contrasts between the models across time
+EM_OPprev_gam2 <- emmeans(OPprev_gam2, ~ TurnoverID | Day, at = list(Day = seq(49, 84, 
+                                                                        by = 1)))
+contrast(EM_OPprev_gam2, method = "pairwise", adjust = "bonferroni") # pairwise contrast comparison with bonferroni correction
+contrasts_OPprev_gam2<-contrast(EM_OPprev_gam2, method = "pairwise", adjust = "bonferroni")
+# Exporting post-hoc comparisons into .csv files
+pairwise_comparisons_OPprev_gam2 <- as.data.frame(summary(contrasts_OPprev_gam2))
+write.csv(pairwise_comparisons_OPprev_gam2, file = "OPTemppairwise_comparisons_prev_gam_49_84_afterT.csv", row.names = FALSE)
+write.csv(EM_OPprev_gam2, file = "OPTempEM_prev_gam_49_84_afterT.csv", row.names = FALSE)
+```
+
+
