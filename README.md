@@ -43,8 +43,4 @@ OP_Temp_AUC_infected_host_densities.csv: this data file contains the area under 
 
 OP_Temp_AUC_infection_prevalence.csv: this data file contains the area under the prevalence curve data for outbreaks in each pitcher. ID = individual identification of each pitcher. Treatment = identification of the original temperature treatment and of the turnover treatments.  AUC = area under the prevalence curve values.
 
-OrdosporaWalsh2021.csv: this data file contains microsporidian infection prevalence and spore concentration data collected in Walsh Lake during the 2021 field season. datetime = sampling date. Lake = Walsh Lake. Mean = mean microsporidian spore concentration (per L). Dent_Per_Inf = percent infection of Ordospora pajunii in Daphnia dentifera.
-
-WalshTemperature.txt: this data file contains temperature data collected at every meter of Walsh Lake during 2021. datetime = date and time of temperature recording from data loggers. wtr_0 ... wtr_5 = water temperature (degrees Celsius) at one-meter intervals through the water column of Walsh Lake.
-
 TemperatureInsidePitcher.csv: this data file contains temperature collected from a pitcher in the diel vertical migration (DVM) treatment. Date = date and time of temperature measurement collected by a data logger. Temperature = water temperature in 5L pitcher filled with filtered lake water.
